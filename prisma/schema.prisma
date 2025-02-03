@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  item          String
+  tableNumber   Int
+  price         Int
+  quantity      Int
+  totalPrice    Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model OrdersHistory {
+  id            String   @id @default(uuid())
+  item          String
+  quantity      Int
+  price         Int
+  totalPrice    Int
+  tableNumber   Int
+}
+
+model Otp {
+  id            String @id @default(uuid())
+  otp           String
+  tableNumber   String 
+}
+
+
+model Secure {
+  id          String @id @default(uuid())
+  tableNumber String 
+  isVerified  Boolean @default(false)
+}
+
+model idAllocated {
+  id          String @id @default(uuid())
+  tableNumber String 
+  allocatedId String
+}
