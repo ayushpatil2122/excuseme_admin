@@ -49,7 +49,6 @@ export interface WebSocketMessage {
   orders: OrderItem[]
 }
 
-// Initial table data
 const initialTables: Table[] = [
   { id: "T-01", status: "available", size: "large", capacity: 6, orders: [] },
   { id: "T-02", status: "occupied", size: "medium", capacity: 4, orders: [], hasAlert: true },
