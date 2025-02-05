@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
+import ToastMessage from "./ui/ToastMessage"
 
 export interface OrderItem {
   name: string
@@ -51,10 +51,10 @@ export interface WebSocketMessage {
 
 const initialTables: Table[] = [
   { id: "T-01", status: "available", size: "large", capacity: 6, orders: [] },
-  { id: "T-02", status: "occupied", size: "medium", capacity: 4, orders: [], hasAlert: true },
-  { id: "T-03", status: "ready", size: "large", capacity: 8, orders: [] },
+  { id: "T-02", status: "available", size: "medium", capacity: 4, orders: []},
+  { id: "T-03", status: "available", size: "large", capacity: 8, orders: [] },
   { id: "T-04", status: "available", size: "small", capacity: 2, orders: [] },
-  { id: "T-05", status: "occupied", size: "medium", capacity: 4, orders: [] },
+  { id: "T-05", status: "available", size: "medium", capacity: 4, orders: [] },
 ]
 
 const getStatusColor = (status: Table["status"]) => {
@@ -91,6 +91,8 @@ export default function TableManagement() {
   const [loading, setLoading] = useState(true)
   const [otpInputs, setOtpInputs] = useState<Record<string, string>>({})
   const [submittingOtp, setSubmittingOtp] = useState(false)
+  const [toastMessage, setToastMessage] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null)
+
 
   useEffect(() => {
     const socket = new WebSocket("wss://ws-production-7739.up.railway.app/")
@@ -198,7 +200,7 @@ export default function TableManagement() {
 
   const handleOtpSubmit = async (tableId: string) => {
     if (!otpInputs[tableId]) {
-      alert("Please enter an OTP")
+      setToastMessage({ message: "Please enter an OTP", type: "error" })
       return
     }
 
@@ -219,7 +221,7 @@ export default function TableManagement() {
       }
 
       const data = await response.json()
-      alert(data.message)
+      setToastMessage({ message: `Otp set on table ${tableNumber}`, type: "success" })
 
       setOtpInputs((prev) => ({
         ...prev,
@@ -227,43 +229,43 @@ export default function TableManagement() {
       }))
     } catch (error) {
       console.error("Error saving OTP:", error)
-      alert("Failed to save OTP. Please try again.")
+      setToastMessage({ message: "Failed to save OTP. Please try again.", type: "error" })
     } finally {
       setSubmittingOtp(false)
     }
   }
 
+
   const clearTable = async (tableId: string) => {
     const tableNumber = tableId.replace("T-", "")[1]
     try {
       const response1 = await fetch(`/api/secure?tableNumber=${tableNumber}`, {
-        method : 'PATCH'
+        method: "PATCH",
       })
       if (!response1.ok) {
         throw new Error("Failed to clear table")
       }
 
       const response2 = await fetch(`/api/otp?tableNumber=${tableNumber}`, {
-        method : 'DELETE'
+        method: "DELETE",
       })
       if (!response2.ok) {
         throw new Error("Failed to clear table")
       }
 
       const response3 = await fetch(`/api/orders?tableNumber=${tableNumber}`, {
-        method : 'DELETE'
+        method: "DELETE",
       })
       if (!response3.ok) {
         throw new Error("Failed to clear table")
       }
 
       const response4 = await fetch(`/api/allocate?tableNumber=${tableNumber}`, {
-        method : 'DELETE'
-      });
-      if(!response4.ok) {
+        method: "DELETE",
+      })
+      if (!response4.ok) {
         throw new Error("Failed to clear table")
       }
-
 
       setTableData((prevData) =>
         prevData.map((table) => {
@@ -279,11 +281,14 @@ export default function TableManagement() {
           return table
         }),
       )
+
+      setToastMessage({ message: `Table cleared successfully ${tableNumber}`, type: "success" })
     } catch (error) {
       console.error("Error clearing table:", error)
-      alert("Failed to clear table. Please try again.")
+      setToastMessage({ message: "Failed to clear table. Please try again.", type: "error" })
     }
   }
+
 
   if (loading) {
     return (
@@ -295,6 +300,13 @@ export default function TableManagement() {
 
   return (
     <div className="container mx-auto p-4">
+      {toastMessage && (
+        <ToastMessage
+          message={toastMessage.message}
+          type={toastMessage.type}
+          onClose={() => setToastMessage(null)}
+        />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         {tableData.map((table) => (
           <Card key={table.id} className="overflow-hidden transition-all hover:shadow-lg">
@@ -319,7 +331,6 @@ export default function TableManagement() {
                     {table.orders.map((order) => (
                       <li key={order.id} className="text-sm flex items-center justify-between">
                         <div className="flex items-center space-x-2">
-                          <Checkbox id={`checkbox-${order.id}`} />
                           <label htmlFor={`checkbox-${order.id}`} className="text-sm cursor-pointer">
                             {order.quantity}x {order.item}
                           </label>
@@ -357,7 +368,6 @@ export default function TableManagement() {
                           {table.orders.map((order) => (
                             <tr key={order.id} className="border-b">
                               <td className="py-2 flex items-center space-x-2">
-                                <Checkbox id={`dialog-checkbox-${order.id}`} />
                                 <label htmlFor={`dialog-checkbox-${order.id}`} className="cursor-pointer">
                                   {order.item}
                                 </label>
@@ -389,9 +399,6 @@ export default function TableManagement() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <Button variant="secondary" size="sm" className="w-full" onClick={() => handleStatusChange(table.id)}>
-                  Change Status
-                </Button>
               </div>
               <div className="space-y-2">
                 <Input
