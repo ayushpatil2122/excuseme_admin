@@ -79,6 +79,13 @@ const getStatusIcon = (status: Table["status"]) => {
   }
 }
 
+const generateRandomOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+
+
+
 export default function TableManagement() {
   const [tableData, setTableData] = useState<Table[]>(initialTables)
   const [loading, setLoading] = useState(true)
@@ -173,6 +180,14 @@ export default function TableManagement() {
       }),
     )
   }
+
+  const handleGenerateOTP = (tableId: string) => {
+    const newOTP = generateRandomOTP();
+    setOtpInputs((prev) => ({
+      ...prev,
+      [tableId]: newOTP,
+    }));
+  };
 
   const handleOtpChange = (tableId: string, value: string) => {
     setOtpInputs((prev) => ({
@@ -385,6 +400,14 @@ export default function TableManagement() {
                   onChange={(e) => handleOtpChange(table.id, e.target.value)}
                   maxLength={6}
                 />
+                <Button 
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleGenerateOTP(table.id)}
+                    className="whitespace-nowrap"
+                  >
+                    Generate OTP
+                  </Button>
                 <Button className="w-full" onClick={() => handleOtpSubmit(table.id)} disabled={submittingOtp}>
                   {submittingOtp ? "Saving..." : "Save OTP"}
                 </Button>

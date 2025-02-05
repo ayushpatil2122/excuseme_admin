@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { Phone, Mail, Clock } from "lucide-react";
 
 export default function Navbar() {
   return (
     <header className="border-b bg-white">
       <div className="max-w-6xl mx-auto px-4">
-        <nav className="flex items-center justify-center h-16">
+        <nav className="flex items-center justify-between h-20">
           <Link href="/" className="flex items-center gap-2">
             <div className="text-[#FF6B2B]">
               <svg
@@ -22,10 +23,21 @@ export default function Navbar() {
                 <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
               </svg>
             </div>
-            <div className="text-xl font-bold">
-              Hotel Jagadamb
+            <div className="text-2xl font-bold text-gray-800">
+              Hotel Jagdamba
             </div>
           </Link>
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 text-gray-600">
+              <Phone size={16} />
+              <span>+91 9172810750</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-600">
+              <Mail size={16} />
+              <span>midnightsolutions750@gmail.com</span>
+            </div>
+          </div>
         </nav>
       </div>
     </header>
