@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import ToastMessage from "./ui/ToastMessage"
+import { RefreshCw, Save } from "lucide-react"
 
 export interface OrderItem {
   name: string
@@ -31,7 +32,9 @@ export interface TableOrder {
   item: string
   quantity: number
   price: number
+  isNew: boolean // True for new orders, false for previous orders
 }
+
 
 export interface Table {
   id: string
@@ -128,47 +131,44 @@ export default function TableManagement() {
   }, [])
 
   const updateTableWithOrder = (data: WebSocketMessage) => {
-    console.log("Updating table with order:", data)
-
+    console.log("Updating table with order:", data);
+  
     setTableData((prevData) =>
       prevData.map((table) => {
         if (table.id === `T-${data.tableNumber.toString().padStart(2, "0")}`) {
-          console.log("Found matching table:", table.id)
-
-          // Create a copy of existing orders
-          const updatedOrders = [...table.orders]
-
+          console.log("Found matching table:", table.id);
+  
+          let updatedOrders = [...table.orders];
+  
+          // Mark previous orders as old (green)
+          updatedOrders = updatedOrders.map((order) => ({ ...order, isNew: false }));
+  
+          // Add new orders on top
           data.orders.forEach((newOrder) => {
-            const existingOrderIndex = updatedOrders.findIndex((order) => order.item === newOrder.name)
-
-            if (existingOrderIndex !== -1) {
-              // If the item already exists, update the quantity
-              updatedOrders[existingOrderIndex].quantity += newOrder.quantity
-            } else {
-              // Otherwise, add a new order
-              updatedOrders.push({
-                id: `order-${Date.now()}-${Math.random()}`, // Ensure unique ID
-                item: newOrder.name,
-                quantity: newOrder.quantity,
-                price: newOrder.price,
-              })
-            }
-          })
-
-          console.log("Updated orders for table:", updatedOrders)
-
+            updatedOrders.unshift({
+              id: `order-${Date.now()}-${Math.random()}`,
+              item: newOrder.name,
+              quantity: newOrder.quantity,
+              price: newOrder.price,
+              isNew: true, // New order appears at the top
+            });
+          });
+  
+          console.log("Updated orders for table:", updatedOrders);
+  
           return {
             ...table,
             status: "occupied",
-            orders: updatedOrders, 
+            orders: updatedOrders,
             lastOrder: new Date().toISOString(),
             hasAlert: true,
-          }
+          };
         }
-        return table
-      }),
-    )
-  }
+        return table;
+      })
+    );
+  };
+  
 
   const handleStatusChange = (tableId: string) => {
     setTableData((prevData) =>
@@ -234,6 +234,19 @@ export default function TableManagement() {
       setSubmittingOtp(false)
     }
   }
+
+  const getAggregatedOrders = (orders: TableOrder[]) => {
+    const aggregatedOrders = orders.reduce((acc, order) => {
+      if (acc[order.item]) {
+        acc[order.item].quantity += order.quantity;
+      } else {
+        acc[order.item] = { ...order };
+      }
+      return acc;
+    }, {} as Record<string, TableOrder>);
+
+    return Object.values(aggregatedOrders);
+  };
 
 
   const clearTable = async (tableId: string) => {
@@ -308,122 +321,119 @@ export default function TableManagement() {
         />
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        {tableData.map((table) => (
-          <Card key={table.id} className="overflow-hidden transition-all hover:shadow-lg">
-            <CardHeader className={`${getStatusColor(table.status)} flex flex-row items-center justify-between`}>
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                {getStatusIcon(table.status)} {table.id}
-                {table.hasAlert && <span className="animate-pulse text-red-500">🔔</span>}
-              </CardTitle>
-              <Badge variant="outline" className="text-xs font-normal">
-                {table.size}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">Capacity:</span>
-                <span className="text-sm">{table.capacity}</span>
-              </div>
-              <div className="space-y-2">
-                <h4 className="text-sm font-semibold">Orders:</h4>
-                {table.orders.length > 0 ? (
-                  <ul className="space-y-1">
-                    {table.orders.map((order) => (
-                      <li key={order.id} className="text-sm flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <label htmlFor={`checkbox-${order.id}`} className="text-sm cursor-pointer">
-                            {order.quantity}x {order.item}
-                          </label>
-                        </div>
-                        <span>₹{(order.price * order.quantity).toFixed(2)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">No orders yet</p>
-                )}
-              </div>
-              <div className="flex flex-col space-y-2">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="w-full">
-                      View Bill
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Bill for Table {table.id}</DialogTitle>
-                      <DialogDescription>Review the bill details for this table.</DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left pb-2">Item</th>
-                            <th className="text-right pb-2">Quantity</th>
-                            <th className="text-right pb-2">Price</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {table.orders.map((order) => (
-                            <tr key={order.id} className="border-b">
-                              <td className="py-2 flex items-center space-x-2">
-                                <label htmlFor={`dialog-checkbox-${order.id}`} className="cursor-pointer">
-                                  {order.item}
-                                </label>
-                              </td>
-                              <td className="text-right py-2">{order.quantity}</td>
-                              <td className="text-right py-2">₹{(order.price * order.quantity).toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr>
-                            <td colSpan={2} className="text-right font-bold pt-2">
-                              Total:
-                            </td>
-                            <td className="text-right font-bold pt-2">
-                              ₹
-                              {table.orders
-                                .reduce((total, order) => total + order.price * order.quantity, 0)
-                                .toFixed(2)}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                    <DialogFooter>
-                      <Button type="button" onClick={() => clearTable(table.id)}>
-                        Clear Table
+        {tableData.map((table) => {
+          const aggregatedOrders = getAggregatedOrders(table.orders);
+
+          return (
+            <Card key={table.id} className="overflow-hidden transition-all hover:shadow-lg">
+              <CardHeader className={`${getStatusColor(table.status)} flex flex-row items-center justify-between`}>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  {getStatusIcon(table.status)} {table.id}
+                  {table.hasAlert && <span className="animate-pulse text-red-500">🔔</span>}
+                </CardTitle>
+                <Badge variant="outline" className="text-xs font-normal">
+                  {table.size}
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-4 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Capacity:</span>
+                  <span className="text-sm">{table.capacity}</span>
+                </div>
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Orders:</h4>
+                  {table.orders.length > 0 ? (
+                    <ul className="space-y-1">
+                      {table.orders.map((order) => (
+                        <li key={order.id} className={`p-2 border rounded-lg ${order.isNew ? "text-black" : "text-green-600"}`}>
+                          <div className="flex items-center space-x-2">
+                            <label htmlFor={`checkbox-${order.id}`} className="text-sm cursor-pointer">
+                              {order.quantity}x {order.item}
+                            </label>
+                          </div>
+                          <span>₹{(order.price * order.quantity).toFixed(2)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">No orders yet</p>
+                  )}
+                </div>
+                <div className="flex flex-col space-y-2">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full">
+                        View Bill
                       </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              <div className="space-y-2">
-                <Input
-                  placeholder="Enter OTP"
-                  value={otpInputs[table.id] || ""}
-                  onChange={(e) => handleOtpChange(table.id, e.target.value)}
-                  maxLength={6}
-                />
-                <Button 
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleGenerateOTP(table.id)}
-                    className="whitespace-nowrap"
-                  >
-                    Generate OTP
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Bill for Table {table.id}</DialogTitle>
+                        <DialogDescription>Review the bill details for this table.</DialogDescription>
+                      </DialogHeader>
+                      <div className="py-4">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left pb-2">Item</th>
+                              <th className="text-right pb-2">Quantity</th>
+                              <th className="text-right pb-2">Price</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {aggregatedOrders.map((order) => (
+                              <tr key={order.id} className="border-b">
+                                <td className="py-2 flex items-center space-x-2">
+                                  <label htmlFor={`dialog-checkbox-${order.id}`} className="cursor-pointer">
+                                    {order.item}
+                                  </label>
+                                </td>
+                                <td className="text-right py-2">{order.quantity}</td>
+                                <td className="text-right py-2">₹{(order.price * order.quantity).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr>
+                              <td colSpan={2} className="text-right font-bold pt-2">
+                                Total:
+                              </td>
+                              <td className="text-right font-bold pt-2">
+                                ₹
+                                {aggregatedOrders
+                                  .reduce((total, order) => total + order.price * order.quantity, 0)
+                                  .toFixed(2)}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" onClick={() => clearTable(table.id)}>
+                          Clear Table
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex-grow p-2 bg-gray-100 rounded-md text-center font-mono text-lg">
+                      {otpInputs[table.id] || "----"}
+                    </div>
+                    <Button variant="outline" onClick={() => handleGenerateOTP(table.id)}>
+                      Generate OTP
+                    </Button>
+                  </div>
+                  <Button className="w-full" onClick={() => handleOtpSubmit(table.id)} disabled={submittingOtp}>
+                    {submittingOtp ? "Saving..." : "Save OTP"}
                   </Button>
-                <Button className="w-full" onClick={() => handleOtpSubmit(table.id)} disabled={submittingOtp}>
-                  {submittingOtp ? "Saving..." : "Save OTP"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
-  )
+  );
 }
-
