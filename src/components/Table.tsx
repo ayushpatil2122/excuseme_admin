@@ -13,9 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
 import ToastMessage from "./ui/ToastMessage"
-import { RefreshCw, Save } from "lucide-react"
 
 export interface OrderItem {
   name: string
@@ -33,6 +31,7 @@ export interface TableOrder {
   quantity: number
   price: number
   isNew: boolean // True for new orders, false for previous orders
+  isServed: boolean
 }
 
 
@@ -98,37 +97,57 @@ export default function TableManagement() {
 
 
   useEffect(() => {
-    const socket = new WebSocket("wss://ws-production-7739.up.railway.app/")
-
+    Notification.requestPermission().then((permission) => {
+      console.log("Notification permission:", permission);
+    });
+  
+    const socket = new WebSocket("wss://ws-production-7739.up.railway.app/");
+  
     socket.onopen = () => {
-      console.log("TableManagement: WebSocket connection established")
-      socket.send(JSON.stringify({ type: "register_admin" }))
-      setLoading(false)
-    }
-
+      console.log("TableManagement: WebSocket connection established");
+      socket.send(JSON.stringify({ type: "register_admin" }));
+      setLoading(false);
+    };
+  
     socket.onmessage = async (event) => {
-      console.log("TableManagement: Received message:", event.data)
+      console.log("TableManagement: Received message:", event.data);
       try {
-        const data: WebSocketMessage = JSON.parse(event.data instanceof Blob ? await event.data.text() : event.data)
-
+        const data: WebSocketMessage = JSON.parse(event.data instanceof Blob ? await event.data.text() : event.data);
+  
         if (data.type === "admin_order_update") {
-          updateTableWithOrder(data)
+          updateTableWithOrder(data);
         }
       } catch (error) {
-        console.error("TableManagement: Error handling WebSocket message:", error)
+        console.error("TableManagement: Error handling WebSocket message:", error);
       }
-    }
-
+    };
+  
     socket.onerror = (error) => {
-      console.error("TableManagement: WebSocket error:", error)
-    }
-
+      console.error("TableManagement: WebSocket error:", error);
+    };
+  
     socket.onclose = () => {
-      console.log("TableManagement: WebSocket connection closed")
-    }
+      console.log("TableManagement: WebSocket connection closed");
+    };
+  
+    return () => socket.close();
+  }, []);
 
-    return () => socket.close()
-  }, [])
+  const playSound = async () => {
+    const audio = new Audio("/assets/NewOrder.mp3");
+
+    try {
+        await audio.play();
+        console.log("Sound played successfully");
+    } catch (err) {
+        console.error("Error playing sound:", err);
+        // Try resuming audio context if blocked
+        document.addEventListener("click", () => {
+            audio.play().catch(err => console.error("Still blocked:", err));
+        }, { once: true }); // Ensures it runs only once
+    }
+};
+
 
   const updateTableWithOrder = (data: WebSocketMessage) => {
     console.log("Updating table with order:", data);
@@ -151,10 +170,27 @@ export default function TableManagement() {
               quantity: newOrder.quantity,
               price: newOrder.price,
               isNew: true, // New order appears at the top
+              isServed:false
             });
           });
   
           console.log("Updated orders for table:", updatedOrders);
+  
+          // Play sound alert
+          playSound();
+          
+  
+          // Show browser notification
+          if (Notification.permission === "granted") {
+            new Notification(`New Order for Table ${table.id}`, {
+              body: `New order received: ${data.orders.map((order) => order.name).join(", ")}`,
+              requireInteraction: true, // Keeps the notification visible
+            });
+            console.log("Notification sent!");
+          } else {
+            console.warn("Notification not allowed:", Notification.permission);
+          }
+          
   
           return {
             ...table,
@@ -168,7 +204,6 @@ export default function TableManagement() {
       })
     );
   };
-  
 
   const handleStatusChange = (tableId: string) => {
     setTableData((prevData) =>
@@ -234,6 +269,23 @@ export default function TableManagement() {
       setSubmittingOtp(false)
     }
   }
+
+  const toggleOrderServed = (tableId: string, orderId: string) => {
+    setTableData((prevData) =>
+      prevData.map((table) => {
+        if (table.id === tableId) {
+          return {
+            ...table,
+            orders: table.orders.map((order) =>
+              order.id === orderId ? { ...order, isServed: !order.isServed } : order
+            ),
+          };
+        }
+        return table;
+      })
+    );
+  };
+  
 
   const getAggregatedOrders = (orders: TableOrder[]) => {
     const aggregatedOrders = orders.reduce((acc, order) => {
@@ -344,17 +396,41 @@ export default function TableManagement() {
                   <h4 className="text-sm font-semibold">Orders:</h4>
                   {table.orders.length > 0 ? (
                     <ul className="space-y-1">
-                      {table.orders.map((order) => (
-                        <li key={order.id} className={`p-2 border rounded-lg ${order.isNew ? "text-black" : "text-green-600"}`}>
-                          <div className="flex items-center space-x-2">
-                            <label htmlFor={`checkbox-${order.id}`} className="text-sm cursor-pointer">
-                              {order.quantity}x {order.item}
-                            </label>
-                          </div>
-                          <span>₹{(order.price * order.quantity).toFixed(2)}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {table.orders.map((order) => (
+                      <li 
+                        key={order.id} 
+                        className={`p-2 border rounded-lg flex justify-between items-center transition-opacity ${order.isServed ? "opacity-50" : "opacity-100"}`}
+                      >
+                        <div>
+                          <label className="text-sm cursor-pointer">
+                            {order.quantity}x {order.item}
+                          </label>
+                          <span className="ml-2">₹{(order.price * order.quantity).toFixed(2)}</span>
+                        </div>
+                  
+                        {/* Toggle Served Button */}
+                        {/* Toggle Switch for Marking Orders as Served */}
+<label className="relative inline-flex items-center cursor-pointer">
+  <input
+    type="checkbox"
+    checked={order.isServed}
+    onChange={() => toggleOrderServed(table.id, order.id)}
+    className="sr-only peer"
+  />
+  <div className="w-10 h-5 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-400 
+      rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-5 peer-checked:after:border-white
+      after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 
+      after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-500">
+  </div>
+  <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">
+    {order.isServed ? "Served" : "Pending"}
+  </span>
+</label>
+
+                      </li>
+                    ))}
+                  </ul>
+                  
                   ) : (
                     <p className="text-sm text-gray-500 italic">No orders yet</p>
                   )}
@@ -436,4 +512,6 @@ export default function TableManagement() {
       </div>
     </div>
   );
+
+
 }
