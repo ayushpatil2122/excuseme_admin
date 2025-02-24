@@ -18,13 +18,25 @@ model Order {
   updatedAt     DateTime @updatedAt
 }
 
-model OrdersHistory {
-  id            String   @id @default(uuid())
-  item          String
-  quantity      Int
-  price         Int
-  totalPrice    Int
+model Item {
+  id             String       @id @default(uuid())
+  name           String
+  quantity       Int
+  price          Int         @default(0)
+  orderHistoryId String
+  orderHistory   OrderHistory @relation(fields: [orderHistoryId], references: [id])
+}
+
+model OrderHistory {
+  id            String    @id @default(uuid())
+  items         Item[]
   tableNumber   Int
+  totalAmount   Int
+  paymentMode	  String
+  status        String
+  bookMark      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Otp {
@@ -44,4 +56,14 @@ model idAllocated {
   id          String @id @default(uuid())
   tableNumber String 
   allocatedId String
+}
+
+model Feedback {
+  id              String @id @default(uuid())
+  name            String
+  testRating      Int?
+  quntityRating   Int?
+  easyToUseRating Int?
+  accuracyRating  Int?
+  comment         String?
 }
